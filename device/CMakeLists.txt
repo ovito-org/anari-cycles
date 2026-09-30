@@ -213,8 +213,15 @@ if(WITH_CYCLES_CUDA_BINARIES)
   endforeach()
   add_dependencies(${PROJECT_NAME} anari_cycles_gpu_kernels)
 
+  # Next to the plugin itself, which on Windows is a DLL in the runtime
+  # directory rather than the library directory.
+  if(WIN32)
+    set(ANARI_CYCLES_PLUGIN_INSTALL_DIR ${CMAKE_INSTALL_BINDIR})
+  else()
+    set(ANARI_CYCLES_PLUGIN_INSTALL_DIR ${CMAKE_INSTALL_LIBDIR})
+  endif()
   install(FILES ${ANARI_CYCLES_KERNEL_FILES}
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cycles/lib
+    DESTINATION ${ANARI_CYCLES_PLUGIN_INSTALL_DIR}/cycles/lib
   )
 endif()
 

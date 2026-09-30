@@ -35,6 +35,8 @@
 // cycles
 #include "util/log.h"
 #include "util/path.h"
+#include "util/string.h"
+#include "util/windows.h"
 // std
 #include <cstdlib>
 #include <mutex>
@@ -70,9 +72,26 @@ static void initCyclesRuntime()
       ccl::path_init(ccl::path_join(pluginDir, "cycles"), "");
     }
 #else
-    // TODO(Windows): resolve the module path via GetModuleHandleExA(
-    // GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS) + GetModuleFileNameA and call
-    // ccl::path_init() the same way.
+    HMODULE module = nullptr;
+    if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS
+                | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+            reinterpret_cast<LPCWSTR>(&initCyclesRuntime),
+            &module)) {
+      // Wide-character API, so that a path outside the ANSI code page
+      // survives; Cycles' path functions take UTF-8.
+      ccl::wstring modulePath(MAX_PATH, L'\0');
+      DWORD length = 0;
+      while ((length = GetModuleFileNameW(
+                  module, modulePath.data(), DWORD(modulePath.size())))
+          == modulePath.size())
+        modulePath.resize(modulePath.size() * 2);
+      if (length != 0) {
+        modulePath.resize(length);
+        const ccl::string pluginDir =
+            ccl::path_dirname(ccl::string_from_wstring(modulePath));
+        ccl::path_init(ccl::path_join(pluginDir, "cycles"), "");
+      }
+    }
 #endif
   });
 }
