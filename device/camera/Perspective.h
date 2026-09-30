@@ -13,6 +13,7 @@ struct Perspective : public Camera
 
   void commitParameters() override;
   void setCameraCurrent(int width, int height) override;
+  float depthToRayDistanceFactor(float x, float y) const override;
 
  private:
   float m_fovy{radians(60.f)};

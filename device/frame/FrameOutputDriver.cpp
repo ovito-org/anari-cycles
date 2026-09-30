@@ -11,6 +11,7 @@
 #include <cmath>
 #include <condition_variable>
 #include <deque>
+#include <limits>
 #include <mutex>
 #include <thread>
 #include <vector>
@@ -456,9 +457,32 @@ void FrameOutputDriver::extractDepthPass(const Tile &tile)
   if (m_impl->frame->m_depthType != ANARI_FLOAT32)
     return;
 
-  if (!tile.get_pass_pixels("depth", 1, m_impl->frame->m_depthBuffer.data()))
+  float *depth = m_impl->frame->m_depthBuffer.data();
+  if (!tile.get_pass_pixels("depth", 1, depth)) {
     m_impl->frame->reportMessage(
         ANARI_SEVERITY_ERROR, "Failed to read 'depth' pass");
+    return;
+  }
+
+  // Cycles' depth pass holds the camera-space z coordinate for perspective
+  // and orthographic cameras and 0 where the primary ray missed. ANARI
+  // specifies the distance along the primary ray, and infinity for misses.
+  const Camera *camera = m_impl->frame->m_camera.ptr;
+  const int width = tile.size.x;
+  const int height = tile.size.y;
+  parallel_for(0, height, [&](int y) {
+    const float ny = (y + 0.5f) / height * 2.f - 1.f;
+    float *row = depth + size_t(y) * width;
+    for (int x = 0; x < width; x++) {
+      const float z = row[x];
+      if (z <= 0.f) {
+        row[x] = std::numeric_limits<float>::infinity();
+        continue;
+      }
+      const float nx = (x + 0.5f) / width * 2.f - 1.f;
+      row[x] = camera ? z * camera->depthToRayDistanceFactor(nx, ny) : z;
+    }
+  });
 }
 
 void FrameOutputDriver::extractNormalPass(const Tile &tile)

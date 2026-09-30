@@ -148,6 +148,11 @@ void Camera::finalize()
   Object::finalize();
 }
 
+float Camera::depthToRayDistanceFactor(float, float) const
+{
+  return 1.f;
+}
+
 helium::box1 Camera::shutter() const
 {
   if (m_shutter.upper < m_shutter.lower)

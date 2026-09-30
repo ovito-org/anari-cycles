@@ -25,6 +25,14 @@ struct Camera : public Object {
   // interval (upper < lower) collapses to the degenerate [lower, lower].
   helium::box1 shutter() const;
 
+  // Cycles' 'depth' pass holds the camera-space z coordinate for perspective
+  // cameras (camera_z_depth()), while ANARI's 'channel.depth' is the distance
+  // along the primary ray. Returns the factor converting the former into the
+  // latter for the ray through the given image-plane point (normalized
+  // coordinates in [-1, 1]). Orthographic z already is the ray distance, and
+  // panorama cameras write Euclidean distances, hence the default of 1.
+  virtual float depthToRayDistanceFactor(float x, float y) const;
+
  protected:
   enum class StereoMode
   {

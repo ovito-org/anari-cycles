@@ -4,6 +4,8 @@
 #include "Perspective.h"
 // cycles
 #include "scene/camera.h"
+// std
+#include <cmath>
 
 namespace anari_cycles {
 
@@ -32,6 +34,16 @@ void Perspective::setCameraCurrent(int width, int height)
   state.scene->camera->set_fov_pre(m_fovy);
   state.scene->camera->set_fov_post(m_fovy);
   state.scene->camera->set_camera_type(ccl::CameraType::CAMERA_PERSPECTIVE);
+}
+
+float Perspective::depthToRayDistanceFactor(float x, float y) const
+{
+  // Camera-space direction of the ray through (x, y), normalized to z = 1
+  // (see the viewplane set up in setCameraCurrent()).
+  const float t = std::tan(0.5f * m_fovy);
+  const float dx = x * m_aspect * t;
+  const float dy = y * t;
+  return std::sqrt(1.f + dx * dx + dy * dy);
 }
 
 } // namespace anari_cycles
