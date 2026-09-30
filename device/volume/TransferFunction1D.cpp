@@ -49,6 +49,10 @@ void TransferFunction1D::commitParameters()
 {
   m_field = getParamObject<SpatialField>("value");
   m_valueRange = getParam<helium::box1>("valueRange", helium::box1{0.f, 1.f});
+  // The spec also allows a double-precision value range.
+  double valueRange64[2];
+  if (getParam("valueRange", ANARI_FLOAT64_BOX1, valueRange64))
+    m_valueRange = helium::box1{float(valueRange64[0]), float(valueRange64[1])};
   m_colorData = getParamObject<Array1D>("color");
   m_uniformColor = {1.f, 1.f, 1.f, 1.f};
   getParam("color", ANARI_FLOAT32_VEC3, &m_uniformColor);
