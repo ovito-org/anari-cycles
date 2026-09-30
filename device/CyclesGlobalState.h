@@ -27,6 +27,10 @@ struct CyclesGlobalState : public helium::BaseGlobalDeviceState
   {
     helium::TimeStamp lastSceneChange{0};
     helium::TimeStamp lastAccumulationReset{0};
+    // Incremented by every rebuild of scene->objects (see
+    // World::setCyclesWorldObjects()); identifies which rebuild created the
+    // scene objects a light keeps track of (Light::addBakedObject()).
+    uint64_t worldBuildGeneration{0};
   } objectUpdates;
 
   ccl::SessionParams session_params;

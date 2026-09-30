@@ -91,6 +91,9 @@ void World::setCyclesWorldObjects(const helium::box1 &shutter)
     scene->delete_nodes(oldObjects);
   }
 
+  // Lights forget the scene objects of earlier rebuilds (Light::addBakedObject()).
+  state.objectUpdates.worldBuildGeneration++;
+
   bool objectsHaveMotion = false;
 
   objectsHaveMotion |= m_zeroInstance->addInstanceObjectsToCyclesScene(shutter);

@@ -20,6 +20,10 @@ struct Sky : public Light
 
   void setCameraBackgroundColor(const math::float3 &color) override;
 
+ protected:
+  // Drives scene->background, which only a world rebuild updates.
+  bool supportsInPlaceUpdate() const override { return false; }
+
  private:
   // (Re)build the sky shader graph from the committed parameters and
   // m_cameraBgColor; keeps the ccl::Shader node itself stable so

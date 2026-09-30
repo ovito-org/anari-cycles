@@ -54,7 +54,25 @@ struct Light : public Object
   // renderer's 'background' parameter. No-op for all other subtypes.
   virtual void setCameraBackgroundColor(const math::float3 &color);
 
+  // Registers a scene object instantiating this light, created by a world
+  // rebuild under the given instance transform (primary or secondary
+  // emitter). Objects of earlier rebuilds are forgotten automatically. This
+  // lets finalize() update the objects in place after a parameter change
+  // instead of forcing a rebuild of the whole world.
+  void addBakedObject(
+      ccl::Object *o, const math::mat4 &instanceXfm, bool secondary);
+
+  // Applies this light's current placement and visibility state to one of
+  // its scene objects (see Group::addGroupToCurrentCyclesScene()).
+  void syncCyclesObject(
+      ccl::Object *o, const math::mat4 &instanceXfm, bool secondary) const;
+
  protected:
+  // Whether a parameter change can be applied by updating the light's scene
+  // objects in place. Lights that drive the scene background must trigger a
+  // world rebuild instead (World::setupBackground()).
+  virtual bool supportsInPlaceUpdate() const;
+
   // Give the underlying Cycles light its own unit-emission shader so it is
   // decoupled from scene->default_light (whose stock emission strength is 0).
   // The light's actual color/intensity is applied via ccl::Light::strength,
@@ -129,6 +147,22 @@ struct Light : public Object
   // or when more than 63 distinct names exist (warned).
   uint64_t getLinkSetMembershipParam(
       const char *name, CyclesGlobalState::LinkSetRegistry &reg);
+
+  // Applies the current light state to the scene objects of the most recent
+  // world rebuild. Returns false if that is not possible and the world must
+  // be rebuilt instead.
+  bool updateBakedObjects();
+
+  // The scene objects instantiating this light (see addBakedObject()).
+  struct BakedObject
+  {
+    ccl::Object *object;
+    math::mat4 instanceXfm;
+    bool secondary;
+  };
+  std::vector<BakedObject> m_bakedObjects;
+  uint64_t m_bakedGeneration{0};
+  bool m_bakedWithSecondary{false};
 };
 
 } // namespace anari_cycles

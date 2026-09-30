@@ -131,32 +131,18 @@ bool Group::addGroupToCurrentCyclesScene(const math::mat4 &xfm,
         l->warnIfUnknownObject();
         return;
       }
-      auto makeLightObject = [&](ccl::Light *cl, const math::mat4 &lightXfm) {
+      // The light keeps track of its scene objects, so that later parameter
+      // changes can be applied in place (see Light::finalize()).
+      auto makeLightObject = [&](ccl::Light *cl, bool secondary) {
         auto *o = state.scene->create_node<ccl::Object>();
         o->set_geometry(cl);
-        o->set_tfm(mat4ToCycles(math::mul(xfm, lightXfm)));
-        // On lights this flag only means "illuminates the shadow-catcher
-        // sub-path" (the unshadowed reference a 'shadowCatcher' surface is
-        // divided by). Blender sets it on every light by default; without it
-        // the sub-path sees no light and catchers record no shadows.
-        o->set_is_shadow_catcher(true);
-        // KHR_AREA_LIGHTS 'visible': hide the light geometry from camera
-        // rays (Cycles turns this into SHADER_EXCLUDE_CAMERA on the light);
-        // illumination of the scene is unaffected.
-        if (!l->visibleToCamera())
-          o->set_visibility(o->get_visibility() & ~ccl::PATH_RAY_CAMERA);
-        // CYCLES_LIGHT_LINKING: which receiver sets this light illuminates
-        // and which blocker sets shadow it (default ~0 = all sets), plus the
-        // CYCLES_LIGHTGROUPS pass its emission accumulates into. Setters
-        // no-op at the defaults.
-        o->set_light_set_membership(l->lightSetMembership());
-        o->set_shadow_set_membership(l->shadowSetMembership());
-        o->set_lightgroup(OIIO::ustring(l->lightGroup()));
+        l->syncCyclesObject(o, xfm, secondary);
+        l->addBakedObject(o, xfm, secondary);
       };
-      makeLightObject(l->cyclesLight(), l->xfm());
+      makeLightObject(l->cyclesLight(), false);
       // Second emitter for e.g. two-sided quad lights.
       if (auto *second = l->secondaryCyclesLight())
-        makeLightObject(second, l->secondaryXfm());
+        makeLightObject(second, true);
     });
   }
 

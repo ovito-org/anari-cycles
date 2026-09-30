@@ -16,6 +16,7 @@
 #include "kernel/svm/types.h"
 #include "scene/background.h"
 #include "scene/camera.h"
+#include "scene/object.h"
 #include "scene/shader.h"
 #include "scene/shader_graph.h"
 #include "scene/shader_nodes.h"
@@ -422,11 +423,75 @@ void Light::finalize()
   // Light state is baked into per-instance ccl::Objects at world-rebuild
   // time (transform, camera visibility, secondary emitters), and neither
   // helium object arrays nor Object::markFinalized() propagate light
-  // commits to the world -- invalidate the baked scene objects here so any
-  // light change triggers a rebuild on the next frame.
-  // TODO: make light updates more efficient (rebuilds the whole world).
-  deviceState()->objectUpdates.lastSceneChange = helium::newTimeStamp();
+  // commits to the world. Update the baked scene objects in place when
+  // possible; otherwise invalidate them, so that the change triggers a
+  // rebuild of the whole world on the next frame.
+  if (!updateBakedObjects())
+    deviceState()->objectUpdates.lastSceneChange = helium::newTimeStamp();
   Object::finalize();
+}
+
+bool Light::supportsInPlaceUpdate() const
+{
+  return true;
+}
+
+void Light::addBakedObject(
+    ccl::Object *o, const math::mat4 &instanceXfm, bool secondary)
+{
+  const uint64_t generation =
+      deviceState()->objectUpdates.worldBuildGeneration;
+  if (m_bakedGeneration != generation) {
+    m_bakedObjects.clear();
+    m_bakedGeneration = generation;
+    m_bakedWithSecondary = false;
+  }
+  m_bakedObjects.push_back({o, instanceXfm, secondary});
+  m_bakedWithSecondary |= secondary;
+}
+
+void Light::syncCyclesObject(
+    ccl::Object *o, const math::mat4 &instanceXfm, bool secondary) const
+{
+  o->set_tfm(mat4ToCycles(
+      math::mul(instanceXfm, secondary ? secondaryXfm() : xfm())));
+  // On lights this flag only means "illuminates the shadow-catcher
+  // sub-path" (the unshadowed reference a 'shadowCatcher' surface is
+  // divided by). Blender sets it on every light by default; without it
+  // the sub-path sees no light and catchers record no shadows.
+  o->set_is_shadow_catcher(true);
+  // KHR_AREA_LIGHTS 'visible': hide the light geometry from camera
+  // rays (Cycles turns this into SHADER_EXCLUDE_CAMERA on the light);
+  // illumination of the scene is unaffected.
+  const uint visibility = visibleToCamera()
+      ? (o->get_visibility() | ccl::PATH_RAY_CAMERA)
+      : (o->get_visibility() & ~ccl::PATH_RAY_CAMERA);
+  o->set_visibility(visibility);
+  // CYCLES_LIGHT_LINKING: which receiver sets this light illuminates
+  // and which blocker sets shadow it (default ~0 = all sets), plus the
+  // CYCLES_LIGHTGROUPS pass its emission accumulates into. Setters
+  // no-op at the defaults.
+  o->set_light_set_membership(lightSetMembership());
+  o->set_shadow_set_membership(shadowSetMembership());
+  o->set_lightgroup(OIIO::ustring(lightGroup()));
+}
+
+bool Light::updateBakedObjects()
+{
+  auto &state = *deviceState();
+  if (!supportsInPlaceUpdate() || !isValid() || m_bakedObjects.empty()
+      || m_bakedGeneration != state.objectUpdates.worldBuildGeneration)
+    return false;
+  // Adding or removing a secondary emitter changes the set of scene objects.
+  if ((secondaryCyclesLight() != nullptr) != m_bakedWithSecondary)
+    return false;
+
+  CyclesGlobalState::SceneLock sceneLock(state);
+  for (const auto &b : m_bakedObjects) {
+    syncCyclesObject(b.object, b.instanceXfm, b.secondary);
+    b.object->tag_update(state.scene);
+  }
+  return true;
 }
 
 ccl::Light *Light::cyclesLight() const
