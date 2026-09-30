@@ -8,9 +8,17 @@
 #include "surface/Surface.h"
 #include "volume/Volume.h"
 // std
+#include <array>
+#include <optional>
 #include <vector>
 
 namespace anari_cycles {
+
+// Values of the attribute channels ('color', 'attribute0'..'attribute3', see
+// AttributeChannel in geometry/GeometryAttributes.h) of the instance being
+// expanded into scene objects; nullopt where the instance does not set them.
+using InstanceAttributeValues = std::array<std::optional<anari_vec::float4>,
+    Geometry::NUM_ATTRIBUTE_CHANNELS>;
 
 struct Group : public Object
 {
@@ -27,13 +35,16 @@ struct Group : public Object
   // it applies to surfaces and volumes -- Cycles has no motion blur for
   // lights, which use 'xfm' (the shutter-start pose) only. 'instanceId' is
   // the ANARI Instance 'id' (KHR_FRAME_CHANNEL_INSTANCE_ID) of the instance
-  // being expanded; ~0u means "no id set". Returns 'true' when any surface
-  // baked active deformation motion steps (the caller then enables
-  // integrator motion blur).
+  // being expanded; ~0u means "no id set". 'attributes', when given, holds
+  // the instance's attribute values, which apply to surfaces whose geometry
+  // lacks the respective attribute. Returns 'true' when any surface baked
+  // active deformation motion steps (the caller then enables integrator
+  // motion blur).
   bool addGroupToCurrentCyclesScene(const math::mat4 &xfm,
       const helium::box1 &shutter,
       const std::vector<ccl::Transform> *motion = nullptr,
-      uint32_t instanceId = ~0u) const;
+      uint32_t instanceId = ~0u,
+      const InstanceAttributeValues *attributes = nullptr) const;
 
   // 'true' when any committed surface's geometry carries deformation motion
   // keys -- i.e. its baked Cycles node depends on the camera shutter.

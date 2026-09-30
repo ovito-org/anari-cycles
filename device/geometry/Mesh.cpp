@@ -482,8 +482,6 @@ void Mesh::setSubdAttributes(ccl::Mesh *mesh) const
           attrs, c, ATTR_ELEMENT_FACE, nPrims, *m_primitiveAttr[c], identity);
     } else if (m_uniformAttr[c]) {
       writeAttributeConstant(attrs, c, *m_uniformAttr[c]);
-    } else if (c == CH_COLOR) {
-      writeAttributeConstant(attrs, c, DEFAULT_COLOR);
     } else {
       attrs.remove(ustring(CHANNEL_CYCLES_NAME[c]));
     }
@@ -622,8 +620,6 @@ void Mesh::setAttributes(ccl::Mesh *mesh) const
           attrs, c, ATTR_ELEMENT_FACE, nTris, *m_primitiveAttr[c], triPrim);
     } else if (m_uniformAttr[c]) {
       writeAttributeConstant(attrs, c, *m_uniformAttr[c]);
-    } else if (c == CH_COLOR) {
-      writeAttributeConstant(attrs, c, DEFAULT_COLOR);
     } else {
       attrs.remove(ustring(CHANNEL_CYCLES_NAME[c]));
     }

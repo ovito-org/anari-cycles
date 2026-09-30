@@ -167,8 +167,6 @@ void Sphere::setAttributes(ccl::PointCloud *pc) const
           attrs, c, ATTR_ELEMENT_VERTEX, n, *m_primitiveAttr[c], identity);
     } else if (m_uniformAttr[c]) {
       writeAttributeConstant(attrs, c, *m_uniformAttr[c]);
-    } else if (c == CH_COLOR) {
-      writeAttributeConstant(attrs, c, DEFAULT_COLOR);
     } else {
       attrs.remove(ustring(CHANNEL_CYCLES_NAME[c]));
     }

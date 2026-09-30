@@ -58,6 +58,14 @@ struct Instance : public Object
   uint32_t m_id{~0u};
   helium::ChangeObserverPtr<Array1D> m_idArray;
 
+  // Instance attributes ('color', 'attribute0'..'attribute3'): a uniform
+  // value, or (for 'transform' arrays) one value per transform. Applied to
+  // surfaces whose geometry lacks the respective attribute.
+  InstanceAttributeValues m_uniformAttributes;
+  std::array<helium::ChangeObserverPtr<Array1D>,
+      Geometry::NUM_ATTRIBUTE_CHANNELS>
+      m_attributeArrays;
+
   enum class Subtype
   {
     TRANSFORM,

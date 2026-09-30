@@ -57,8 +57,11 @@ inline const char *CHANNEL_CYCLES_NAME[Geometry::NUM_ATTRIBUTE_CHANNELS] = {
     "vertex.attribute3"};
 
 // Cycles' AttributeNode outputs (0,0,0) for absent attributes, but the ANARI
-// default for the 'color' attribute is opaque white — geometries without any
-// color source upload this constant instead of leaving the attribute absent.
+// default for the 'color' attribute is opaque white. Geometries without any
+// color source leave the attribute absent, so that the instance 'color' (or
+// this default) can fill in -- both are attached to every surface object as
+// per-object attributes, which Cycles only consults when the geometry itself
+// lacks the attribute (see Group::addGroupToCurrentCyclesScene()).
 inline constexpr anari_vec::float4 DEFAULT_COLOR = {1.f, 1.f, 1.f, 1.f};
 
 // Convert an ANARI array to float4 once per source element (a source element

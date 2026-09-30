@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "Instance.h"
+#include "geometry/GeometryAttributes.h"
 // std
 #include <cstring>
 
@@ -22,6 +23,7 @@ Instance::Instance(CyclesGlobalState *s, std::string_view subtype)
     : Object(ANARI_INSTANCE, s),
       m_xfmArray(this),
       m_idArray(this),
+      m_attributeArrays{{{this}, {this}, {this}, {this}, {this}}},
       m_motionTransform(this),
       m_motionScale(this),
       m_motionRotation(this),
@@ -64,6 +66,28 @@ void Instance::commitParameters()
         "-- transforms without an id entry use the uniform 'id'",
         m_idArray->size(),
         m_xfmArray->size());
+  }
+
+  // Instance attributes: a uniform value, or (for 'transform' arrays) an
+  // array with one value per transform.
+  for (int c = 0; c < Geometry::NUM_ATTRIBUTE_CHANNELS; c++) {
+    const char *name = CHANNEL_PARAM[c];
+    m_uniformAttributes[c].reset();
+    anari_vec::float4 v = {0.f, 0.f, 0.f, 1.f};
+    if (getParam(name, ANARI_FLOAT32_VEC4, &v))
+      m_uniformAttributes[c] = v;
+    m_attributeArrays[c] = m_subtype == Subtype::TRANSFORM
+        ? getParamObject<Array1D>(name)
+        : nullptr;
+    if (m_attributeArrays[c] && m_xfmArray
+        && m_attributeArrays[c]->size() != m_xfmArray->size()) {
+      reportMessage(ANARI_SEVERITY_WARNING,
+          "'%s' array size (%zu) does not match 'transform' array size (%zu) "
+          "-- transforms without an entry use the uniform value",
+          name,
+          m_attributeArrays[c]->size(),
+          m_xfmArray->size());
+    }
   }
 
   m_motionTransform = nullptr;
@@ -148,20 +172,35 @@ bool Instance::addInstanceObjectsToCyclesScene(const helium::box1 &shutter)
   if (!isMotionSubtype()) {
     bool deformationMotion = false;
     if (!m_xfmArray) {
-      deformationMotion =
-          m_group->addGroupToCurrentCyclesScene(m_xfm, shutter, nullptr, m_id);
+      deformationMotion = m_group->addGroupToCurrentCyclesScene(
+          m_xfm, shutter, nullptr, m_id, &m_uniformAttributes);
     } else {
       auto *begin = m_xfmArray->beginAs<helium::mat4>();
       auto *end = m_xfmArray->endAs<helium::mat4>();
       const uint32_t *ids =
           m_idArray ? m_idArray->beginAs<uint32_t>() : nullptr;
       const size_t numIds = m_idArray ? m_idArray->size() : 0;
+      // Per-transform attribute values, converted to float4 once.
+      std::array<std::vector<anari_vec::float4>,
+          Geometry::NUM_ATTRIBUTE_CHANNELS>
+          attributeValues;
+      for (int c = 0; c < Geometry::NUM_ATTRIBUTE_CHANNELS; c++) {
+        if (m_attributeArrays[c])
+          attributeValues[c] = convertToFloat4(*m_attributeArrays[c]);
+      }
+      InstanceAttributeValues attributes;
       for (auto *m = begin; m != end; ++m) {
         const size_t i = size_t(m - begin);
         // Per-transform id when provided, else the uniform 'id' fallback.
         const uint32_t id = (ids && i < numIds) ? ids[i] : m_id;
-        deformationMotion |=
-            m_group->addGroupToCurrentCyclesScene(*m, shutter, nullptr, id);
+        // Likewise for the attributes.
+        for (int c = 0; c < Geometry::NUM_ATTRIBUTE_CHANNELS; c++) {
+          attributes[c] = i < attributeValues[c].size()
+              ? std::optional(attributeValues[c][i])
+              : m_uniformAttributes[c];
+        }
+        deformationMotion |= m_group->addGroupToCurrentCyclesScene(
+            *m, shutter, nullptr, id, &attributes);
       }
     }
     return deformationMotion;
@@ -175,14 +214,14 @@ bool Instance::addInstanceObjectsToCyclesScene(const helium::box1 &shutter)
   // geometry inside the group can still enable it).
   const auto steps = bakeMotionOnShutter(m_motion, shutter);
   if (steps.empty()) {
-    return m_group->addGroupToCurrentCyclesScene(
-        motionPoseAt(shutter.lower), shutter, nullptr, m_id);
+    return m_group->addGroupToCurrentCyclesScene(motionPoseAt(shutter.lower),
+        shutter, nullptr, m_id, &m_uniformAttributes);
   }
 
   // MOTION_POSITION_START contract: the object's base transform is the pose
   // at the shutter start (== motion step 0).
-  m_group->addGroupToCurrentCyclesScene(
-      motionPoseAt(shutter.lower), shutter, &steps, m_id);
+  m_group->addGroupToCurrentCyclesScene(motionPoseAt(shutter.lower),
+      shutter, &steps, m_id, &m_uniformAttributes);
   return true;
 }
 

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "Group.h"
+#include "geometry/GeometryAttributes.h"
 // cycles
 #include "kernel/types.h"
 #include "scene/object.h"
@@ -29,7 +30,8 @@ void Group::commitParameters()
 bool Group::addGroupToCurrentCyclesScene(const math::mat4 &xfm,
     const helium::box1 &shutter,
     const std::vector<ccl::Transform> *motion,
-    uint32_t instanceId) const
+    uint32_t instanceId,
+    const InstanceAttributeValues *attributes) const
 {
   auto &state = *deviceState();
   bool deformationMotion = false;
@@ -60,6 +62,26 @@ bool Group::addGroupToCurrentCyclesScene(const math::mat4 &xfm,
         OIIO::ustring("instanceId"), OIIO::TypeFloat, 1, &instanceIdAttr);
   };
 
+  // Instance attributes become per-object attributes, which the material's
+  // AttributeNodes only read where the geometry lacks the attribute (Cycles
+  // gives geometry attributes precedence, matching ANARI's lookup order).
+  // 'color' always gets a value, because geometries without a color source
+  // rely on the object-level default (see DEFAULT_COLOR).
+  auto setInstanceAttributes = [&](ccl::Object *o) {
+    for (int c = 0; c < Geometry::NUM_ATTRIBUTE_CHANNELS; c++) {
+      std::optional<anari_vec::float4> v;
+      if (attributes)
+        v = (*attributes)[c];
+      if (!v && c == CH_COLOR)
+        v = DEFAULT_COLOR;
+      if (!v)
+        continue;
+      const float value[4] = {(*v)[0], (*v)[1], (*v)[2], (*v)[3]};
+      o->attributes.emplace_back(
+          OIIO::ustring(CHANNEL_CYCLES_NAME[c]), ccl::TypeFloat4, 1, value);
+    }
+  };
+
   if (m_surfaceData) {
     auto **surfacesBegin = (Surface **)m_surfaceData->handlesBegin();
     auto **surfacesEnd = (Surface **)m_surfaceData->handlesEnd();
@@ -79,6 +101,7 @@ bool Group::addGroupToCurrentCyclesScene(const math::mat4 &xfm,
       o->set_tfm(cxfm);
       setMotion(o);
       setInstanceId(o);
+      setInstanceAttributes(o);
       o->set_pass_id(s->id());
       // Ray visibility / compositing flags live on the ANARI Surface, so
       // every instance of a surface shares them (documented limitation of
