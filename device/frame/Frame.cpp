@@ -289,7 +289,8 @@ void Frame::renderFrame()
     // render scheduler's divider step-down to 1. Full-res render durations
     // (previews excluded) seed the automatic divider choice.
     const bool changeReset =
-        currentFrameChanged || resetAccumulationNextFrame();
+        currentFrameChanged || resetAccumulationNextFrame() || m_discarded;
+    m_discarded = false;
     if (!m_lastRenderWasPreview)
       m_fullResDuration = m_duration;
 
@@ -484,7 +485,28 @@ int Frame::frameReady(ANARIWaitMask m)
 
 void Frame::discard()
 {
-  // no-op
+  // Cancel this frame's render in flight, if any. The result of a discarded
+  // render is undefined per the ANARI spec, so stopping the session early is
+  // fine -- it makes the device available for the next render right away.
+  auto &state = *deviceState();
+  if (!state.output_driver->isRendering(this))
+    return;
+
+  // Blocks until the session thread stopped path tracing.
+  state.session->cancel(true);
+
+  // A render canceled before completing any sample delivers no tile, which
+  // would leave the output driver waiting forever -- end it here instead.
+  if (state.output_driver->isRendering(this))
+    state.output_driver->renderEnd();
+
+  // Cycles keeps the cancel flag raised (making every later render stop
+  // immediately) until the session progress gets reset.
+  state.session->progress.reset();
+
+  // The accumulation buffer holds an unknown number of samples now; restart
+  // accumulation with the next render.
+  m_discarded = true;
 }
 
 bool Frame::ready() const

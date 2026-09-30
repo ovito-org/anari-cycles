@@ -323,6 +323,12 @@ void FrameOutputDriver::renderEnd()
   m_impl->cv.notify_all();
 }
 
+bool FrameOutputDriver::isRendering(const Frame *f) const
+{
+  std::lock_guard<std::mutex> lock(m_impl->mutex);
+  return !m_impl->renderFinished && m_impl->frame.ptr == f;
+}
+
 void FrameOutputDriver::wait()
 {
   std::unique_lock<std::mutex> lock(m_impl->mutex);

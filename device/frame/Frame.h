@@ -138,6 +138,10 @@ struct Frame : public helium::BaseFrame
 
   bool m_accumulation{false};
 
+  // Whether the most recent render was canceled by discard(); the next render
+  // then restarts accumulation.
+  bool m_discarded{false};
+
   anari::DataType m_colorType{ANARI_UNKNOWN};
   anari::DataType m_depthType{ANARI_UNKNOWN};
   anari::DataType m_normalType{ANARI_UNKNOWN};

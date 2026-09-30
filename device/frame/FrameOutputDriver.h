@@ -23,6 +23,8 @@ struct FrameOutputDriver : public ccl::OutputDriver
 
   bool renderBegin(Frame *);
   void renderEnd();
+  // Whether the given frame's render is currently in flight.
+  bool isRendering(const Frame *) const;
 
   // Blocks until the in-flight render (if any) has delivered its tile.
   void wait();
